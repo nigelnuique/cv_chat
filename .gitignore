@@ -1,0 +1,57 @@
+# Environment variables and secrets
+.env
+*.env
+.env.local
+.env.production
+
+# API keys and sensitive data
+config.ini
+secrets.json
+credentials.json
+
+# Temporary files and directories
+temp_renders/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Generated output files (optional - you might want to keep these)
+# rendercv_output/
+# *.png
+# *.pdf
+# *.html
+# *.md
+# *.typ
+
+# Python virtual environment
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/ 
