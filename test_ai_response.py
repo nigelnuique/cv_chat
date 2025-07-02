@@ -4,6 +4,11 @@ Test script to simulate AI response and check if suggestion system works
 """
 
 import json
+import sys
+
+# Add the system site-packages path so PyYAML can be imported in environments
+# where it is installed outside the user's default site-packages directory.
+sys.path.append('/usr/lib/python3/dist-packages')
 import yaml
 
 # Load the current YAML

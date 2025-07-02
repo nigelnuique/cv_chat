@@ -17,6 +17,30 @@ from flask import Flask, render_template_string, request, jsonify, send_file
 import json
 import uuid
 import difflib
+import re
+
+# Utility to robustly parse JSON from AI responses that may include
+# Markdown code fences or extra text.
+def parse_json_response(text: str):
+    """Extract and parse JSON object from AI response text."""
+    if not text:
+        raise ValueError("No text provided")
+
+    cleaned = text.strip()
+
+    # Remove Markdown code fences if present
+    if cleaned.startswith("```"):
+        # Drop the first line (``` or ```json)
+        cleaned = cleaned.split('\n', 1)[1] if '\n' in cleaned else cleaned
+        if cleaned.endswith("```"):
+            cleaned = cleaned.rsplit("```", 1)[0]
+
+    # Extract JSON object from any surrounding text
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if match:
+        cleaned = match.group(0)
+
+    return json.loads(cleaned)
 
 # AI Integration - you can switch between different providers
 try:
@@ -186,7 +210,7 @@ Make sure your JSON is properly formatted and valid.
             # Try to parse as JSON, fallback to plain text
             try:
                 if ai_response:
-                    parsed_response = json.loads(ai_response)
+                    parsed_response = parse_json_response(ai_response)
                     yaml_changes = parsed_response.get("yaml_changes")
                     
                     # If there are YAML changes, create a suggestion
@@ -209,7 +233,7 @@ Make sure your JSON is properly formatted and valid.
                         "yaml_changes": None,
                         "suggestion": None
                     }
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, ValueError):
                 return {
                     "chat_response": ai_response or "No response from AI",
                     "yaml_changes": None,
@@ -1347,7 +1371,7 @@ Make sure your JSON is properly formatted and valid.
                 try:
                     if ai_response:
                         print(f"DEBUG: Raw AI response: {ai_response[:200]}...")  # First 200 chars
-                        parsed_response = json.loads(ai_response)
+                        parsed_response = parse_json_response(ai_response)
                         yaml_changes = parsed_response.get("yaml_changes")
                         
                         print(f"DEBUG: Parsed yaml_changes type: {type(yaml_changes)}")
@@ -1382,7 +1406,7 @@ Make sure your JSON is properly formatted and valid.
                             "yaml_changes": None,
                             "suggestion": None
                         }
-                except json.JSONDecodeError as e:
+                except (json.JSONDecodeError, ValueError) as e:
                     print(f"DEBUG: JSON decode error: {e}")
                     print(f"DEBUG: Failed to parse: {ai_response}")
                     ai_result = {
