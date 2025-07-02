@@ -50,6 +50,9 @@ class ChatManager:
             else:
                 print("⚠️  OPENAI_API_KEY not found in environment variables")
                 print("   Set it with: export OPENAI_API_KEY=your_key_here")
+                self.add_message("system", "⚠️ OpenAI API key not found. Chat features are disabled.")
+        else:
+            self.add_message("system", "⚠️ OpenAI package is not installed. Chat features are disabled.")
     
     def add_message(self, role, content, yaml_content=None, suggestion_id=None):
         """Add a message to the chat history."""
@@ -692,6 +695,8 @@ EDITOR_HTML = """
             width: 40%;
             border-right: 1px solid #404040;
             position: relative;
+            display: flex;
+            flex-direction: column;
         }
 
         .suggestion-controls {
@@ -711,7 +716,13 @@ EDITOR_HTML = """
             justify-content: center;
             position: relative;
         }
-        
+
+        #yaml-editor {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+        }
+
         .CodeMirror {
             height: 100% !important;
             font-size: 14px;
