@@ -689,6 +689,14 @@ EDITOR_HTML = """
             border-right: 1px solid #404040;
             position: relative;
         }
+
+        .suggestion-controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: none;
+            gap: 8px;
+        }
         
         .preview-panel {
             width: 30%;
@@ -704,6 +712,7 @@ EDITOR_HTML = """
             height: 100% !important;
             font-size: 14px;
             line-height: 1.5;
+            flex: 1;
         }
         
         .pdf-preview {
@@ -771,34 +780,9 @@ EDITOR_HTML = """
             background: #666;
         }
         
-        /* Suggestion styles */
-        .suggestion-container {
-            background: #2d2d2d;
-            border: 1px solid #404040;
-            border-radius: 8px;
-            margin: 10px 0;
-            overflow: hidden;
-        }
-        
-        .suggestion-header {
-            background: #363636;
-            padding: 12px 15px;
-            border-bottom: 1px solid #404040;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        
-        .suggestion-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #ffffff;
-        }
-        
-        .suggestion-actions {
-            display: flex;
-            gap: 8px;
-        }
+
+        /* Suggestion button styles */
+
         
         .suggestion-btn {
             padding: 6px 12px;
@@ -828,69 +812,6 @@ EDITOR_HTML = """
             background: #c82333;
         }
         
-        .suggestion-content {
-            padding: 15px;
-        }
-        
-        .suggestion-explanation {
-            color: #cccccc;
-            font-size: 13px;
-            line-height: 1.4;
-            margin-bottom: 15px;
-        }
-        
-        .diff-viewer {
-            background: #1e1e1e;
-            border: 1px solid #404040;
-            border-radius: 6px;
-            overflow: hidden;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 12px;
-            line-height: 1.4;
-        }
-        
-        .diff-header {
-            background: #363636;
-            padding: 8px 12px;
-            border-bottom: 1px solid #404040;
-            font-size: 11px;
-            color: #888;
-            font-weight: 600;
-        }
-        
-        .diff-content {
-            max-height: 300px;
-            overflow-y: auto;
-            padding: 0;
-        }
-        
-        .diff-line {
-            padding: 2px 12px;
-            white-space: pre;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        }
-        
-        .diff-line.removed {
-            background: rgba(220, 53, 69, 0.2);
-            color: #dc3545;
-            text-decoration: line-through;
-        }
-        
-        .diff-line.added {
-            background: rgba(40, 167, 69, 0.2);
-            color: #28a745;
-        }
-        
-        .diff-line.context {
-            color: #888;
-        }
-        
-        .diff-line.header {
-            background: #2d2d2d;
-            color: #666;
-            font-weight: 600;
-        }
-        
         /* CodeMirror diff highlighting */
         .CodeMirror-line.diff-removed {
             background: rgba(220, 53, 69, 0.1);
@@ -903,27 +824,6 @@ EDITOR_HTML = """
             color: #28a745;
         }
         
-        .suggestion-status {
-            font-size: 11px;
-            padding: 4px 8px;
-            border-radius: 3px;
-            font-weight: 500;
-        }
-        
-        .suggestion-status.pending {
-            background: #ffc107;
-            color: #212529;
-        }
-        
-        .suggestion-status.accepted {
-            background: #28a745;
-            color: white;
-        }
-        
-        .suggestion-status.declined {
-            background: #dc3545;
-            color: white;
-        }
     </style>
 </head>
 <body>
@@ -957,6 +857,10 @@ EDITOR_HTML = """
         
         <div class="editor-panel">
             <textarea id="yaml-editor">{{ yaml_content }}</textarea>
+            <div id="suggestion-controls" class="suggestion-controls">
+                <button id="accept-suggestion" class="suggestion-btn accept">✓ Accept</button>
+                <button id="decline-suggestion" class="suggestion-btn decline">✗ Decline</button>
+            </div>
         </div>
         
         <div class="preview-panel">
@@ -986,10 +890,28 @@ EDITOR_HTML = """
         const chatMessages = document.getElementById('chat-messages');
         const chatInput = document.getElementById('chat-input');
         const sendButton = document.getElementById('send-button');
-        
+        const suggestionControls = document.getElementById('suggestion-controls');
+        const acceptSuggestionBtn = document.getElementById('accept-suggestion');
+        const declineSuggestionBtn = document.getElementById('decline-suggestion');
+
         let saveTimeout;
         let isRendering = false;
         let isChatting = false;
+        let currentSuggestion = null;
+        let originalYaml = '';
+        let diffMarkers = [];
+
+        acceptSuggestionBtn.addEventListener('click', () => {
+            if (currentSuggestion) {
+                acceptSuggestion(currentSuggestion.id);
+            }
+        });
+
+        declineSuggestionBtn.addEventListener('click', () => {
+            if (currentSuggestion) {
+                declineSuggestion(currentSuggestion.id);
+            }
+        });
         
         function setStatus(message, type = 'info') {
             statusEl.textContent = message;
@@ -1032,106 +954,66 @@ EDITOR_HTML = """
             messageDiv.className = `message ${role}`;
             messageDiv.textContent = content;
             chatMessages.appendChild(messageDiv);
-            
-            // If there's a suggestion, add it after the message
+
             if (suggestion) {
-                const suggestionDiv = createSuggestionElement(suggestion);
-                chatMessages.appendChild(suggestionDiv);
+                showSuggestionInEditor(suggestion);
             }
-            
+
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
-        
-        function createSuggestionElement(suggestion) {
-            const container = document.createElement('div');
-            container.className = 'suggestion-container';
-            container.id = `suggestion-${suggestion.id}`;
-            
-            const header = document.createElement('div');
-            header.className = 'suggestion-header';
-            
-            const title = document.createElement('div');
-            title.className = 'suggestion-title';
-            title.textContent = '🤖 AI Suggestion';
-            
-            const status = document.createElement('span');
-            status.className = `suggestion-status ${suggestion.status}`;
-            status.textContent = suggestion.status;
-            
-            const actions = document.createElement('div');
-            actions.className = 'suggestion-actions';
-            
-            if (suggestion.status === 'pending') {
-                const acceptBtn = document.createElement('button');
-                acceptBtn.className = 'suggestion-btn accept';
-                acceptBtn.textContent = '✓ Accept';
-                acceptBtn.onclick = () => acceptSuggestion(suggestion.id);
-                
-                const declineBtn = document.createElement('button');
-                declineBtn.className = 'suggestion-btn decline';
-                declineBtn.textContent = '✗ Decline';
-                declineBtn.onclick = () => declineSuggestion(suggestion.id);
-                
-                actions.appendChild(acceptBtn);
-                actions.appendChild(declineBtn);
-            }
-            
-            header.appendChild(title);
-            header.appendChild(status);
-            header.appendChild(actions);
-            
-            const content = document.createElement('div');
-            content.className = 'suggestion-content';
-            
-            const explanation = document.createElement('div');
-            explanation.className = 'suggestion-explanation';
-            explanation.textContent = suggestion.explanation;
-            
-            const diffViewer = createDiffViewer(suggestion.diff);
-            
-            content.appendChild(explanation);
-            content.appendChild(diffViewer);
-            
-            container.appendChild(header);
-            container.appendChild(content);
-            
-            return container;
+
+        function showSuggestionInEditor(suggestion) {
+            currentSuggestion = suggestion;
+            originalYaml = editor.getValue();
+            applySuggestionDiff(suggestion.diff);
+            suggestionControls.style.display = 'flex';
         }
-        
-        function createDiffViewer(diff) {
-            const container = document.createElement('div');
-            container.className = 'diff-viewer';
-            
-            const header = document.createElement('div');
-            header.className = 'diff-header';
-            header.textContent = 'Changes Preview';
-            
-            const content = document.createElement('div');
-            content.className = 'diff-content';
-            
-            diff.forEach(line => {
-                const lineDiv = document.createElement('div');
-                lineDiv.className = 'diff-line';
-                
-                if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
-                    lineDiv.className += ' header';
-                } else if (line.startsWith('-')) {
-                    lineDiv.className += ' removed';
-                } else if (line.startsWith('+')) {
-                    lineDiv.className += ' added';
-                } else {
-                    lineDiv.className += ' context';
-                }
-                
-                lineDiv.textContent = line;
-                content.appendChild(lineDiv);
+
+        function applySuggestionDiff(diff) {
+            const originalLines = originalYaml.split('\n');
+            let lineIndex = 0;
+
+            editor.operation(() => {
+                diff.forEach(line => {
+                    if (line.startsWith('@@')) {
+                        const m = /@@ -(\d+),\d+ \+(\d+),\d+ @@/.exec(line);
+                        if (m) {
+                            lineIndex = parseInt(m[1]) - 1;
+                        }
+                    } else if (line.startsWith('-')) {
+                        const text = originalLines[lineIndex] || '';
+                        diffMarkers.push(
+                            editor.markText(
+                                { line: lineIndex, ch: 0 },
+                                { line: lineIndex, ch: text.length },
+                                { className: 'diff-removed' }
+                            )
+                        );
+                        lineIndex++;
+                    } else if (line.startsWith('+')) {
+                        const text = line.slice(1);
+                        editor.replaceRange(text + '\n', { line: lineIndex, ch: 0 });
+                        diffMarkers.push(
+                            editor.markText(
+                                { line: lineIndex, ch: 0 },
+                                { line: lineIndex, ch: text.length },
+                                { className: 'diff-added' }
+                            )
+                        );
+                        lineIndex++;
+                    } else if (!line.startsWith('---') && !line.startsWith('+++')) {
+                        lineIndex++;
+                    }
+                });
             });
-            
-            container.appendChild(header);
-            container.appendChild(content);
-            
-            return container;
         }
+
+        function clearSuggestionDiff() {
+            diffMarkers.forEach(m => m.clear());
+            diffMarkers = [];
+            suggestionControls.style.display = 'none';
+        }
+        
         
         function acceptSuggestion(suggestionId) {
             fetch(`/api/suggestion/${suggestionId}/accept`, {
@@ -1145,21 +1027,9 @@ EDITOR_HTML = """
                 if (data.success) {
                     // Update the editor with the accepted YAML
                     editor.setValue(data.yaml_content);
-                    
-                    // Update suggestion status
-                    const suggestionEl = document.getElementById(`suggestion-${suggestionId}`);
-                    if (suggestionEl) {
-                        const statusEl = suggestionEl.querySelector('.suggestion-status');
-                        statusEl.textContent = 'accepted';
-                        statusEl.className = 'suggestion-status accepted';
-                        
-                        // Remove action buttons
-                        const actionsEl = suggestionEl.querySelector('.suggestion-actions');
-                        if (actionsEl) {
-                            actionsEl.innerHTML = '';
-                        }
-                    }
-                    
+                    clearSuggestionDiff();
+                    currentSuggestion = null;
+
                     // Trigger save and render
                     clearTimeout(saveTimeout);
                     saveTimeout = setTimeout(() => {
@@ -1186,20 +1056,9 @@ EDITOR_HTML = """
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Update suggestion status
-                    const suggestionEl = document.getElementById(`suggestion-${suggestionId}`);
-                    if (suggestionEl) {
-                        const statusEl = suggestionEl.querySelector('.suggestion-status');
-                        statusEl.textContent = 'declined';
-                        statusEl.className = 'suggestion-status declined';
-                        
-                        // Remove action buttons
-                        const actionsEl = suggestionEl.querySelector('.suggestion-actions');
-                        if (actionsEl) {
-                            actionsEl.innerHTML = '';
-                        }
-                    }
-                    
+                    editor.setValue(originalYaml);
+                    clearSuggestionDiff();
+                    currentSuggestion = null;
                     addMessage('system', '❌ Suggestion declined');
                 } else {
                     addMessage('system', '❌ Error declining suggestion: ' + data.error);
