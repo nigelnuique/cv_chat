@@ -17,6 +17,7 @@ from flask import Flask, render_template_string, request, jsonify, send_file
 import json
 import uuid
 import difflib
+from concurrent.futures import ThreadPoolExecutor
 
 # AI Integration - you can switch between different providers
 try:
@@ -229,6 +230,8 @@ class SimpleYAMLEditor:
         self.temp_dir = "temp_renders"
         self.ensure_directories()
         self.current_render = None
+        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.pending_renders = {}
     
     def ensure_directories(self):
         """Ensure required directories exist."""
@@ -313,32 +316,38 @@ design:
             return f"# Error loading file: {str(e)}"
     
     def save_yaml(self, yaml_content):
-        """Save and render YAML content."""
+        """Save YAML and start rendering in the background."""
         try:
             # Validate YAML syntax
             yaml.safe_load(yaml_content)
-            
+
             # Save to file
             with open(self.working_cv_file, 'w', encoding='utf-8') as file:
                 file.write(yaml_content)
-            
-            # Render immediately
-            render_result = self.render_pdf(yaml_content)
-            
+
+            # Start background render
+            render_info = self.start_render(yaml_content)
+
             return {
                 "success": True,
-                "render": render_result
+                "render": render_info
             }
         except yaml.YAMLError as e:
             return {"error": f"Invalid YAML: {str(e)}"}
         except Exception as e:
             return {"error": f"Error: {str(e)}"}
+
+    def start_render(self, yaml_content):
+        """Begin rendering asynchronously and return info."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        future = self.executor.submit(self.render_pdf, yaml_content, timestamp)
+        self.pending_renders[timestamp] = future
+        return {"started": True, "pdf_url": f"/pdf/{timestamp}", "timestamp": timestamp}
     
-    def render_pdf(self, yaml_content):
+    def render_pdf(self, yaml_content, timestamp):
         """Render CV to PDF using RenderCV."""
         try:
             # Create unique temp directory
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             temp_render_dir = os.path.join(self.temp_dir, f"render_{timestamp}")
             os.makedirs(temp_render_dir, exist_ok=True)
             
@@ -375,13 +384,16 @@ design:
                 # Use the first PDF found (there should be only one)
                 pdf_file = pdf_files[0]
                 pdf_path = os.path.join(rendercv_output_dir, pdf_file)
-                
+
                 self.current_render = {
                     "pdf_path": pdf_path,
                     "timestamp": timestamp,
                     "temp_dir": temp_render_dir
                 }
-                
+
+                # Mark render as finished
+                self.pending_renders.pop(timestamp, None)
+
                 return {
                     "success": True,
                     "pdf_url": f"/pdf/{timestamp}",
@@ -393,13 +405,16 @@ design:
                 print(f"Temp directory contents: {os.listdir(temp_render_dir)}")
                 if os.path.exists(rendercv_output_dir):
                     print(f"rendercv_output contents: {os.listdir(rendercv_output_dir)}")
+                self.pending_renders.pop(timestamp, None)
                 return {
                     "error": f"RenderCV failed: {error_msg}"
                 }
                 
         except subprocess.TimeoutExpired:
+            self.pending_renders.pop(timestamp, None)
             return {"error": "Rendering timed out"}
         except Exception as e:
+            self.pending_renders.pop(timestamp, None)
             return {"error": f"Render error: {str(e)}"}
 
 editor = SimpleYAMLEditor()
@@ -891,10 +906,29 @@ EDITOR_HTML = """
             pdfPreview.style.display = 'none';
         }
         
-        function showPDF(url) {
-            pdfPreview.src = url;
-            pdfPreview.style.display = 'block';
-            previewMessage.style.display = 'none';
+        function showPDF(url, attempts = 0) {
+            fetch(url, { method: 'HEAD' })
+                .then(resp => {
+                    if (resp.ok) {
+                        pdfPreview.src = url + '?t=' + Date.now();
+                        pdfPreview.style.display = 'block';
+                        previewMessage.style.display = 'none';
+                        setStatus('Rendered successfully', 'success');
+                    } else if (attempts < 10) {
+                        setTimeout(() => showPDF(url, attempts + 1), 1000);
+                    } else {
+                        setStatus('Render error', 'error');
+                        showPreviewMessage('❌ Render timed out');
+                    }
+                })
+                .catch(() => {
+                    if (attempts < 10) {
+                        setTimeout(() => showPDF(url, attempts + 1), 1000);
+                    } else {
+                        setStatus('Render error', 'error');
+                        showPreviewMessage('❌ Network error');
+                    }
+                });
         }
         
         function addMessage(role, content, suggestion = null) {
@@ -1116,10 +1150,9 @@ EDITOR_HTML = """
             .then(response => response.json())
             .then(data => {
                 isRendering = false;
-                
+
                 if (data.success) {
-                    setStatus('Rendered successfully', 'success');
-                    if (data.render && data.render.success) {
+                    if (data.render && data.render.started) {
                         showPDF(data.render.pdf_url);
                     } else if (data.render && data.render.error) {
                         setStatus('Render error', 'error');
