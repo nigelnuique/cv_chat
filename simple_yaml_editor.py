@@ -1229,10 +1229,13 @@ EDITOR_HTML = """
         
         function saveAndRender() {
             if (isRendering) return;
-            
+
             isRendering = true;
             setStatus('Rendering...', 'info');
-            showPreviewMessage('🔄 Rendering CV...');
+
+            if (!pdfPreview.src) {
+                showPreviewMessage('🔄 Rendering CV...');
+            }
             
             const yamlContent = editor.getValue();
             
