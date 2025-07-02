@@ -4,7 +4,12 @@ Test script to simulate AI response and check if suggestion system works
 """
 
 import json
-import yaml
+
+try:
+    import yaml
+except ModuleNotFoundError:
+    import pytest
+    pytest.skip("PyYAML is not installed", allow_module_level=True)
 
 # Load the current YAML
 with open('working_CV.yaml', 'r', encoding='utf-8') as f:
@@ -42,4 +47,4 @@ print(f"Are equal: {current_yaml == modified_yaml}")
 if modified_yaml != current_yaml:
     print("\n✅ YAML changes detected - suggestion should be created")
 else:
-    print("\n❌ No YAML changes detected - no suggestion should be created") 
+    print("\n❌ No YAML changes detected - no suggestion should be created")
