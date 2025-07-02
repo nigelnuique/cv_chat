@@ -102,6 +102,20 @@ cv_chat/
 - **Chat Editing**: AI chat editing functionality is currently not working properly
 - Some features may require additional setup
 
+## Troubleshooting
+
+If the interface is not behaving as expected:
+
+- **Chat Not Responding**: Ensure the `openai` package is installed and the
+  `OPENAI_API_KEY` environment variable is set. The app now displays a system
+  message if the key or package is missing.
+- **YAML Editor Minimized**: The editor relies on CodeMirror assets loaded from
+  the internet. If they fail to load, the textarea may appear very small.
+  Updating the CSS ensures it stretches to fill the panel, but you may need
+  internet access for full functionality.
+- **PDF Preview Missing**: Verify that the `rendercv` package is installed so
+  the server can generate PDF previews.
+
 ## Testing
 
 Run the included test script to simulate an AI suggestion:
