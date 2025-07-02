@@ -412,7 +412,7 @@ EDITOR_HTML = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Powered YAML CV Editor</title>
+    <title>CV Chat</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/yaml/yaml.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
@@ -817,7 +817,7 @@ EDITOR_HTML = """
 </head>
 <body>
     <div class="header">
-        <h1>🤖 AI-Powered YAML CV Editor</h1>
+        <h1>🤖 CV Chat</h1>
         <div class="status" id="status">Ready</div>
     </div>
     
