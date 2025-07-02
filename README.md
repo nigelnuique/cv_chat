@@ -9,6 +9,7 @@ A Python-based CV editor that uses AI to help you create and edit professional C
 - **Multiple Output Formats**: Generate PDF, HTML, Markdown, and PNG versions
 - **Real-time Preview**: See changes instantly as you edit
 - **Simple Interface**: Easy-to-use command-line interface
+- **Cursor-Style Suggestions**: Review and accept AI changes with diff highlighting (see `CURSOR_STYLE_README.md`)
 
 ## Prerequisites
 
@@ -100,6 +101,13 @@ cv_chat/
 
 - **Chat Editing**: AI chat editing functionality is currently not working properly
 - Some features may require additional setup
+
+## Testing
+
+Run the included test script to simulate an AI suggestion:
+```bash
+python test_ai_response.py
+```
 
 ## Contributing
 
