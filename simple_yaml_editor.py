@@ -18,6 +18,7 @@ import json
 import uuid
 import difflib
 from concurrent.futures import ThreadPoolExecutor
+import re
 
 # AI Integration - you can switch between different providers
 try:
@@ -211,11 +212,40 @@ Make sure your JSON is properly formatted and valid.
                         "suggestion": None
                     }
             except json.JSONDecodeError:
-                return {
-                    "chat_response": ai_response or "No response from AI",
-                    "yaml_changes": None,
-                    "suggestion": None
-                }
+                # AI didn't follow JSON format. Try to extract YAML from the response
+                yaml_block = None
+                match = re.search(r"```(?:yaml)?\n(.*?)\n```", ai_response, re.DOTALL)
+                if match:
+                    yaml_block = match.group(1).strip()
+                    explanation = (ai_response[:match.start()] + ai_response[match.end():]).strip()
+                else:
+                    # Maybe the entire response is raw YAML
+                    try:
+                        yaml.safe_load(ai_response)
+                        yaml_block = ai_response
+                        explanation = ""
+                    except yaml.YAMLError:
+                        explanation = ai_response
+
+                if yaml_block:
+                    suggestion = None
+                    if yaml_block != current_yaml:
+                        suggestion = self.create_suggestion(
+                            current_yaml,
+                            yaml_block,
+                            "AI suggested changes"
+                        )
+                    return {
+                        "chat_response": explanation or "AI provided YAML changes.",
+                        "yaml_changes": yaml_block,
+                        "suggestion": suggestion
+                    }
+                else:
+                    return {
+                        "chat_response": ai_response or "No response from AI",
+                        "yaml_changes": None,
+                        "suggestion": None
+                    }
                 
         except Exception as e:
             return {
@@ -1418,11 +1448,39 @@ Make sure your JSON is properly formatted and valid.
                 except json.JSONDecodeError as e:
                     print(f"DEBUG: JSON decode error: {e}")
                     print(f"DEBUG: Failed to parse: {ai_response}")
-                    ai_result = {
-                        "chat_response": ai_response or "No response from AI", 
-                        "yaml_changes": None,
-                        "suggestion": None
-                    }
+
+                    yaml_block = None
+                    match = re.search(r"```(?:yaml)?\n(.*?)\n```", ai_response, re.DOTALL)
+                    if match:
+                        yaml_block = match.group(1).strip()
+                        explanation = (ai_response[:match.start()] + ai_response[match.end():]).strip()
+                    else:
+                        try:
+                            yaml.safe_load(ai_response)
+                            yaml_block = ai_response
+                            explanation = ""
+                        except yaml.YAMLError:
+                            explanation = ai_response
+
+                    if yaml_block:
+                        suggestion = None
+                        if yaml_block != yaml_content:
+                            suggestion = chat_manager.create_suggestion(
+                                yaml_content,
+                                yaml_block,
+                                "AI suggested changes"
+                            )
+                        ai_result = {
+                            "chat_response": explanation or "AI provided YAML changes.",
+                            "yaml_changes": yaml_block,
+                            "suggestion": suggestion
+                        }
+                    else:
+                        ai_result = {
+                            "chat_response": ai_response or "No response from AI",
+                            "yaml_changes": None,
+                            "suggestion": None
+                        }
                     
             except Exception as e:
                 ai_result = {
