@@ -7,7 +7,11 @@ Right: Fast PDF preview using RenderCV
 """
 
 import os
-import yaml
+try:
+    import yaml
+except ImportError:  # pragma: no cover - runtime dependency check
+    print("\u26a0\ufe0f PyYAML is not installed. Install with: pip install pyyaml")
+    raise SystemExit(1)
 import subprocess
 import tempfile
 import shutil
