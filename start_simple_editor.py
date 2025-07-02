@@ -11,24 +11,38 @@ import time
 from threading import Timer
 
 def check_dependencies():
-    """Check if required dependencies are installed."""
+    """Check if required Python packages are installed."""
     print("🔍 Checking dependencies...")
-    
-    # Check if RenderCV is installed
+
+    missing = []
+
+    # Basic package checks
+    for pkg in ["flask", "yaml", "openai", "requests"]:
+        try:
+            __import__(pkg)
+        except Exception:
+            missing.append(pkg)
+
+    # Check if RenderCV command is available
     try:
-        result = subprocess.run(["python", "-m", "rendercv", "--version"], 
-                              capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            print("✅ RenderCV is installed")
-            return True
-        else:
-            print("❌ RenderCV not found")
-            print("   Install it with: pip install rendercv")
-            return False
+        result = subprocess.run([
+            "python",
+            "-m",
+            "rendercv",
+            "--version",
+        ], capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            missing.append("rendercv")
     except Exception:
-        print("❌ RenderCV not found")
-        print("   Install it with: pip install rendercv")
+        missing.append("rendercv")
+
+    if missing:
+        print("❌ Missing dependencies: " + ", ".join(missing))
+        print("   Install them with: pip install -r requirements.txt")
         return False
+
+    print("✅ All dependencies are installed")
+    return True
 
 def create_sample_cv():
     """Create a sample working_CV.yaml if it doesn't exist."""
