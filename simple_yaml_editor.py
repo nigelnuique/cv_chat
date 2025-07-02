@@ -123,6 +123,72 @@ class ChatManager:
         if suggestion:
             suggestion["status"] = "declined"
         return suggestion
+
+    def apply_quick_edits(self, user_message: str, current_yaml: str):
+        """Handle simple edits directly without calling the AI service."""
+        try:
+            data = yaml.safe_load(current_yaml) or {}
+        except yaml.YAMLError:
+            return None
+
+        if not isinstance(data, dict) or "cv" not in data:
+            return None
+
+        cv_data = data.get("cv", {})
+        original = yaml.dump(data, default_flow_style=False, sort_keys=False)
+        modified = False
+        explanations = []
+
+        # Name update
+        m = re.search(r"(?:change|update|set).*name\s*(?:to)?\s*(.+)", user_message, re.I)
+        if m:
+            new_name = m.group(1).strip()
+            if new_name and cv_data.get("name") != new_name:
+                explanations.append(f"Updated name from '{cv_data.get('name')}' to '{new_name}'")
+                cv_data["name"] = new_name
+                modified = True
+
+        # Email update
+        m = re.search(r"(?:change|update|set).*email\s*(?:to)?\s*([\w.+-]+@[\w.-]+)", user_message, re.I)
+        if m:
+            new_email = m.group(1).strip()
+            if cv_data.get("email") != new_email:
+                explanations.append(f"Updated email from '{cv_data.get('email')}' to '{new_email}'")
+                cv_data["email"] = new_email
+                modified = True
+
+        # Phone update
+        m = re.search(r"(?:change|update|set).*phone\s*(?:to)?\s*([\d +().-]+)", user_message, re.I)
+        if m:
+            new_phone = m.group(1).strip()
+            if cv_data.get("phone") != new_phone:
+                explanations.append(f"Updated phone from '{cv_data.get('phone')}' to '{new_phone}'")
+                cv_data["phone"] = new_phone
+                modified = True
+
+        # Location update
+        m = re.search(r"(?:change|update|set).*location\s*(?:to)?\s*(.+)", user_message, re.I)
+        if m:
+            new_loc = m.group(1).strip()
+            if new_loc and cv_data.get("location") != new_loc:
+                explanations.append(
+                    f"Updated location from '{cv_data.get('location')}' to '{new_loc}'"
+                )
+                cv_data["location"] = new_loc
+                modified = True
+
+        if not modified:
+            return None
+
+        data["cv"] = cv_data
+        new_yaml = yaml.dump(data, default_flow_style=False, sort_keys=False)
+        suggestion = self.create_suggestion(original, new_yaml, "\n".join(explanations))
+
+        return {
+            "chat_response": "\n".join(explanations),
+            "yaml_changes": new_yaml,
+            "suggestion": suggestion,
+        }
     
     async def get_ai_response(self, user_message, current_yaml):
         """Get AI response and potentially modify YAML."""
@@ -1340,6 +1406,23 @@ def chat():
     
     # Add user message to chat history
     chat_manager.add_message("user", user_message)
+
+    # Attempt quick edits without calling the AI service
+    quick = chat_manager.apply_quick_edits(user_message, yaml_content)
+    if quick:
+        suggestion_id = quick["suggestion"]["id"] if quick["suggestion"] else None
+        chat_manager.add_message(
+            "ai",
+            quick["chat_response"],
+            quick["yaml_changes"],
+            suggestion_id,
+        )
+        return jsonify({
+            "success": True,
+            "response": quick["chat_response"],
+            "yaml_changes": quick["yaml_changes"],
+            "suggestion": quick["suggestion"],
+        })
     
     try:
         # Get AI response (this is a simplified synchronous version)
